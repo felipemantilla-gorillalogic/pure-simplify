@@ -1,5 +1,5 @@
 {
-  "name": "simplify",
+  "name": "@purepm/simplify",
   "version": "1.0.4",
   "description": "A tool to simplify and streamline test files using Claude AI",
   "main": "index.js",
