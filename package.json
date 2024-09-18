@@ -1,6 +1,6 @@
 {
   "name": "@purepm/simplify",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A tool to simplify and streamline test files using Claude AI",
   "main": "index.js",
   "bin": {
@@ -14,7 +14,12 @@
   "scripts": {
     "release": "npm version patch && git push && git push --tags && npm publish"
   },
-  "keywords": ["testing", "simplification", "AI", "Claude"],
+  "keywords": [
+    "testing",
+    "simplification",
+    "AI",
+    "Claude"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
