@@ -236,12 +236,6 @@ const main = async () => {
         error: error.message,
       });
     }
-
-    // Break after the second object for testing purposes
-    if (i === 5) {
-      console.log(chalk.magenta('\nBreaking after second object for testing purposes'));
-      break;
-    }
   }
 
   console.log('\n'); // New line after progress bar
