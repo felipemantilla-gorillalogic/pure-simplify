@@ -17,11 +17,18 @@ This script is designed to simplify and streamline test files in a project by le
 - NPM packages: `fs`, `path`, `axios`, `chalk`, `readline`
 - Claude API key (set as an environment variable `CLAUDE_API_KEY`)
 
+
+## Install
+
+```
+npm install -g @purepm/simplify
+```
+
 ## Usage
 
 1. Run the script:
    ```
-   node script_name.js
+   export CLAUDE_API_KEY=<your-claude-api-key> && simplify
    ```
 
 2. Enter the directory path when prompted.
