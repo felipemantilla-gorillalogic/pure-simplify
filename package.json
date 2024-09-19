@@ -1,6 +1,6 @@
 {
   "name": "@purepm/simplify",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "A tool to simplify and streamline test files using Claude AI",
   "main": "index.js",
   "type": "module",
