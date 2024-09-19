@@ -4,6 +4,7 @@ import path from 'path';
 import axios from 'axios';
 import chalk from 'chalk';
 import readline from 'readline';
+import cliProgress from 'cli-progress';
 
 function findSpecFilesAndRelated(dir, filesList = []) {
 
@@ -52,6 +53,10 @@ async function sendToClaudeForReview(specContent, relatedContent) {
     1. Removing unnecessary or unhelpful tests
     2. Identifying parts within tests that are not useful
     3. Cleaning and simplifying existing tests
+    4. DO NOT REMOVE ANY COMMENTS, ONLY TESTS
+    5. DO NOT REFACTOR IMPORTS
+    6. DO NOT REMOVE SPACES OR END OF LINES, KEEP THE FORMAT OF THE FILES AS IT IS.
+    7. REMOVE ALL THE IMPORTS THAT WOULDNT BE NEEDED IF THE TESTS ARE SIMPLIFIED.
     
     Do not add any new tests or content. The goal is to streamline the test suite while maintaining its effectiveness.
     
@@ -123,16 +128,6 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-function updateProgressBar(current, total) {
-  console.clear(); // Clear the console before updating the progress bar
-  process.stdout.write(chalk.cyan('🚀 Processing Spec Files 🚀').bold.underline + '\n\n');
-  const percentage = Math.round((current / total) * 100);
-  const filledWidth = Math.round((percentage / 100) * 20);
-  const emptyWidth = 20 - filledWidth;
-  const progressBar = '█'.repeat(filledWidth) + '░'.repeat(emptyWidth);
-  process.stdout.write(`🚀 Simplifying Spec Files by PurePM 🚀 \n\n\r[${progressBar}] ${percentage}% (${current}/${total})`);
-}
-
 const main = async () => {
   // Prompt user for directory path
   const startDir = await new Promise((resolve) => {
@@ -160,17 +155,50 @@ const main = async () => {
   const processedFiles = {
     success: [],
     error: [],
+    skipped: []
+  };
+
+  // Create a new progress bar instance
+  const progressBar = new cliProgress.SingleBar({
+    format: 'Simplifying Spec Files |' + chalk.cyan('{bar}') + '| {percentage}% || {value}/{total} Files',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: true
+  });
+
+  // Initialize the progress bar
+  progressBar.start(result.length, 0);
+
+  // Generate initial report
+  const reportFileName = `simplify_report_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  const reportPath = path.join(startDir, reportFileName);
+
+  const updateReport = async () => {
+    const report = {
+      totalProcessed: processedFiles.success.length + processedFiles.error.length + processedFiles.skipped.length,
+      successfullyProcessed: processedFiles.success.length,
+      errors: processedFiles.error.length,
+      skipped: processedFiles.skipped.length,
+      successfulFiles: processedFiles.success,
+      errorFiles: processedFiles.error,
+      skippedFiles: processedFiles.skipped
+    };
+
+    try {
+      await fs.promises.writeFile(reportPath, JSON.stringify(report, null, 2));
+    } catch (error) {
+      console.error(chalk.red(`Error updating report file: ${error.message}`));
+    }
   };
 
   // New code to iterate through each object in the array and get the content of each test file
   for (let i = 0; i < result.length; i++) {
-    updateProgressBar(i + 1, result.length);
     const specFile = result[i];
 
     try {
       const specContent = fs.readFileSync(specFile.specFilePath, 'utf8');
       const sanitizedSpecContent = specContent.replace(/[^\x20-\x7E]/g, ''); // Remove non-printable characters
-      const sanitizedRelatedContent = null;
+      let sanitizedRelatedContent = null;
 
       let relatedContent = null;
       if (specFile.relatedFilePath) {
@@ -191,10 +219,18 @@ const main = async () => {
               const parsedResponse = JSON.parse(claudeResponse);
 
               if (parsedResponse.newSpecContent) {
-                fs.writeFileSync(specFile.specFilePath, parsedResponse.newSpecContent, 'utf8');
+                // Ensure the new content ends with a newline
+                const newContent = parsedResponse.newSpecContent.endsWith('\n')
+                  ? parsedResponse.newSpecContent
+                  : parsedResponse.newSpecContent + '\n';
+                
+                fs.writeFileSync(specFile.specFilePath, newContent, 'utf8');
                 processedFiles.success.push(specFile.specFilePath);
+                await updateReport();
               } else {
-                console.log(chalk.yellow(`No new content received for ${specFile.specFileName}. File not updated.`));
+                console.log(chalk.yellow(`\n\nNo new content received for ${specFile.specFileName}. File skipped.\n`));
+                processedFiles.skipped.push(specFile.specFilePath);
+                await updateReport();
               }
             } catch (parseError) {
               console.error(chalk.red('Error parsing Claude response:'), parseError);
@@ -218,6 +254,7 @@ const main = async () => {
               file: specFile.specFileName,
               error: `Failed to receive response after ${maxRetries} attempts`,
             });
+            await updateReport();
           }
         }
       }
@@ -228,39 +265,32 @@ const main = async () => {
           file: specFile.specFileName,
           error: `Failed to receive response after ${maxRetries} attempts`,
         });
+        await updateReport();
       }
     } catch (error) {
       console.error(chalk.red(`Error processing file ${specFile.specFileName}:`, error.message));
+      console.error(error);
       processedFiles.error.push({
         file: specFile.specFileName,
         error: error.message,
       });
+      await updateReport();
     }
+
+    // Update the progress bar
+    progressBar.update(i + 1);
   }
+
+  // Stop the progress bar
+  progressBar.stop();
 
   console.log('\n'); // New line after progress bar
   console.log(chalk.cyan.bold('\nProcessed Files Summary:'));
   console.log(chalk.green('✓ Successfully processed:'), processedFiles.success.length);
+  console.log(chalk.yellow('⚠ Skipped:'), processedFiles.skipped.length);
   console.log(chalk.red('✗ Errors:'), processedFiles.error.length);
 
-  // Generate a JSON report of the results
-  const report = {
-    totalProcessed: processedFiles.success.length + processedFiles.error.length,
-    successfullyProcessed: processedFiles.success.length,
-    errors: processedFiles.error.length,
-    successfulFiles: processedFiles.success,
-    errorFiles: processedFiles.error
-  };
-
-  const reportFileName = `simplify_report_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-  const reportPath = path.join(startDir, reportFileName);
-  
-  try {
-    await fs.promises.writeFile(reportPath, JSON.stringify(report, null, 2));
-    console.log(chalk.cyan(`\nReport generated: ${reportPath}`));
-  } catch (error) {
-    console.error(chalk.red(`Error writing report file: ${error.message}`));
-  }
+  console.log(chalk.cyan(`\nFinal report generated: ${reportPath}`));
 
   rl.close();
 };
